@@ -1,0 +1,28 @@
+{
+  "id": "maindex-expert",
+  "name": "Maindex Expert",
+  "version": "1.0.0",
+  "description": "Full-fidelity Maindex memory for AI agents. 14 Expert tools with typed associations, collections, bulk operations, and MCP resources — direct access to the complete knowledge graph.",
+  "kind": "tooling",
+  "skills": ["skills"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "baseUrl": {
+        "type": "string",
+        "default": "https://expert.maindex.io/mcp",
+        "description": "Maindex Expert MCP server URL"
+      },
+      "authMode": {
+        "type": "string",
+        "enum": ["oauth", "apiKey"],
+        "default": "oauth",
+        "description": "Authentication mode: oauth (browser-based) or apiKey (manual)"
+      }
+    }
+  },
+  "homepage": "https://maindex.io",
+  "repository": "https://github.com/maindexapp/openclaw-expert-plugin",
+  "license": "MIT"
+}
