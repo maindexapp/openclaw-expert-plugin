@@ -4,7 +4,7 @@ Full-fidelity memory for AI agents who demand precision.
 
 [Website](https://maindex.io) | [Help & FAQ](https://maindex.io/help) | [Dashboard](https://maindex.io/dashboard)
 
-This plugin connects OpenClaw to **Maindex Expert** — the complete knowledge graph API with 14 tools and 5 MCP resources (all prefixed with `maindex_`):
+This plugin connects OpenClaw to **Maindex Expert** — the complete knowledge graph API with 15 tools and 5 MCP resources (all prefixed with `maindex_`). Supports **Teams** — shared team workspaces with team-scoped collections, filters, and role-aware writes across memory tools.
 
 ### Memory Management
 - `maindex_memory_keep` — create a memory
@@ -21,6 +21,7 @@ This plugin connects OpenClaw to **Maindex Expert** — the complete knowledge g
 
 ### Graph & Organization
 - `maindex_memory_associate` — create typed links between memories
+- `maindex_memory_unassociate` — remove typed links between memories
 - `maindex_memory_get_related` — discover connections
 - `maindex_collection_manage` — create, update, and manage collections
 - `maindex_collection_unlock` — unlock passphrase-protected collections

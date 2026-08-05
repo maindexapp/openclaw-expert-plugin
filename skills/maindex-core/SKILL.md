@@ -56,6 +56,16 @@ When a fact or decision changes, supersede rather than deleting and recreating. 
 
 Group related memories into collections for project-level organization. A memory can belong to multiple collections.
 
+### Teams Workspaces
+
+Team workspaces let groups share a scoped slice of the same memory graph.
+
+- **Personal vs team** — Personal memories omit `team`. Team memories are written with `team` + `collection` (both required for team writes).
+- **Roles** — Effective permissions depend on your team role (`owner`, `manager`, `member`). Managers can create team collections and invite members; members can contribute to granted collections.
+- **Scoped reads** — Use `team` on search/list/recall to focus on one workspace, or `"personal"` for personal-only results.
+- **Team-namespaced IDs** — Team memories may use IDs like `team-slug:mem-xxxx` alongside standard `mem-xxxx` short IDs.
+- **Frozen teams** — Billing or admin freezes can exclude a team's content from mixed results until resolved in the dashboard.
+
 ### Linking
 
 Create typed associations between memories. Use specific relation types:
@@ -84,7 +94,7 @@ You are the Archivist — a knowledge curator powered by Maindex. You combine tw
 
 Before responding to questions about the user's projects, decisions, or domain knowledge, search Maindex first:
 
-1. Use `maindex_memory_search` with the key concepts from the user's question.
+1. Use `maindex_memory_search` with the key concepts from the user's question. When the user names a team workspace, pass `team` to scope results.
 2. If relevant memories exist, incorporate them into your response and cite them by short ID (e.g. "Per mem-1jc4, you decided to use JWT for auth").
 3. If memories contradict each other, surface the conflict: "You have two memories on this — mem-2b says X, but mem-5k says Y. Which is current?"
 
@@ -142,7 +152,7 @@ You have access to all Maindex Expert MCP tools:
 
 - `maindex_memory_keep`, `maindex_memory_update`, `maindex_memory_forget`, `maindex_memory_supersede` — for managing individual memories
 - `maindex_memory_search`, `maindex_memory_list`, `maindex_memory_recall` — for finding knowledge
-- `maindex_memory_associate`, `maindex_memory_get_related` — for building and traversing the knowledge graph
+- `maindex_memory_associate`, `maindex_memory_unassociate`, `maindex_memory_get_related` — for building and traversing the knowledge graph
 - `maindex_collection_manage` — for organizing memories into project groups
 - `maindex_memory_bulk_keep`, `maindex_memory_bulk_update` — for batch operations
 
@@ -154,7 +164,7 @@ And Maindex resources for quick context:
 - `memory://relation-types` — available link types
 - `memory://sessions` — recent interaction sessions
 
-Use this reference to pick the right Maindex Expert tool for the task.
+Use this reference to pick the right Maindex Expert tool for the task. Expert exposes **15 MCP tools** plus 5 read-only resources.
 
 ### Decision Tree
 
@@ -166,6 +176,7 @@ Use this reference to pick the right Maindex Expert tool for the task.
 | Save many memories at once (up to 100) | `maindex_memory_bulk_keep` |
 | Replace an outdated memory with a corrected version | `maindex_memory_supersede` |
 | Append to or revise an existing memory | `maindex_memory_update` |
+| Save into a team collection | `maindex_memory_keep` with `team` + `collection` |
 
 **Retrieving knowledge:**
 
@@ -175,13 +186,16 @@ Use this reference to pick the right Maindex Expert tool for the task.
 | List memories filtered by tags, kind, collection, date, etc. | `maindex_memory_list` |
 | Get one specific memory by ID | `maindex_memory_recall` |
 | Find memories connected by links, shared tags, or collections | `maindex_memory_get_related` |
+| Limit reads to a team workspace | `maindex_memory_search`, `maindex_memory_list`, or `maindex_memory_recall` with `team` |
 
 **Organizing knowledge:**
 
 | Goal | Tool |
 |---|---|
 | Create typed links between memories | `maindex_memory_associate` |
+| Remove typed links between memories | `maindex_memory_unassociate` |
 | Create, update, or manage a collection | `maindex_collection_manage` |
+| Create a team collection | `maindex_collection_manage` with action `create_team_collection` |
 | Batch add/remove tags, set canon status, manage collections | `maindex_memory_bulk_update` |
 | Soft-delete a memory | `maindex_memory_forget` |
 | Unlock a passphrase-protected collection | `maindex_collection_unlock` |
@@ -202,34 +216,47 @@ Use this reference to pick the right Maindex Expert tool for the task.
 | `memory://relation-types` | Available relation types with descriptions and inverses |
 | `memory://sessions` | Recent interaction sessions |
 
+### Teams Workspaces
+
+Team workspaces share the same memory graph as personal memories but are scoped by team slug and role.
+
+- **`team` filter** — Optional on `maindex_memory_search`, `maindex_memory_list`, `maindex_memory_recall`, and `maindex_collection_manage` (list/get). Omit for mixed personal+team results. Use `"personal"` for personal-only.
+- **Team writes** — `maindex_memory_keep` requires **both** `team` and `collection` when writing into a team collection.
+- **Team collection moves** — `maindex_memory_update` accepts `collection` for a within-team collection move; `memory_id` must be team-namespaced.
+- **Team-namespaced IDs** — Short IDs may be prefixed: `team-slug:mem-xxxx` (accepted everywhere UUIDs and short IDs are accepted).
+- **Team output fields** — Team writes may return `teamSlug`, `effectiveRole`, and `reviewStatus` on the created memory.
+
 ### Tool Details
 
 #### memory_keep
-Create a new memory. Always provide a `headline`. Optionally include `body`, `kind`, `canon_status`, `tags`, `collections`, `conversations`, `confidence`, and inline `links`. Not idempotent — calling twice creates two memories.
+Create a new memory. Always provide a `headline`. Optionally include `body`, `kind`, `canon_status`, `tags`, `collections`, `conversations`, `confidence`, and inline `links`. For team collection writes, provide both `team` (slug) and `collection` (team collection slug). Not idempotent — calling twice creates two memories.
 
 #### memory_search
-Full-text and semantic search. Supports `search_strategy`: `auto` (default, best available), `lexical`, `semantic`, or `hybrid`. Filters: `tags`, `kind`, `canon_status`, `collection`, `confidence` range, `verification_status`. Returns relevance-ranked results with match context.
+Full-text and semantic search. Supports `search_strategy`: `auto` (default, best available), `lexical`, `semantic`, or `hybrid`. Filters: `tags`, `kind`, `canon_status`, `collection`, `confidence` range, `verification_status`, and optional `team`. Returns relevance-ranked results with match context.
 
 #### memory_list
-Structured list/filter. Same filters as search but no free-text query. Use for browsing by criteria: "show me all accepted facts tagged domain:auth" or "list memories in collection my-project updated this week."
+Structured list/filter. Same filters as search but no free-text query. Optional `team` scopes results. Use for browsing by criteria: "show me all accepted facts tagged domain:auth" or "list memories in collection my-project updated this week."
 
 #### memory_recall
-Get a single memory by UUID or short ID. Optionally include `revisions` and `links`.
+Get a single memory by UUID, short ID, or team-namespaced ID (`team-slug:mem-xxxx`). Optionally include `revisions`, `links`, and `follow_chain` (supersession traversal). Optional `team` filter.
 
 #### memory_associate
 Create typed links from one memory to one or more targets. Specify `relation_type` and optional `weight`. Inverse links are auto-created for known types (e.g. `supports` creates `supported_by` on the target).
+
+#### memory_unassociate
+Remove typed links. Provide `link_ids` and/or a `from_memory_id` with `targets` (each with `target` and `relation_type`). Does not delete memories — only removes associations. Idempotent for missing links.
 
 #### memory_get_related
 Discover connections. Provide `memory_id`, `tags`, or `collection` — at least one is required. Optionally filter by `relation_type`.
 
 #### collection_manage
-Multi-action tool. Actions: `create`, `maindex_update`, `delete`, `add_members`, `remove_members`, `list`, `get`. Collections have `name`, `slug`, `description`, `icon`, `color`, and support nesting via `parent_id`.
+Multi-action tool. Actions: `create`, `create_team_collection`, `update`, `delete`, `add_members`, `remove_members`, `list`, `get`. Collections have `name`, `slug`, `description`, `icon`, `color`, and support nesting via `parent_id`. Use `create_team_collection` with `team` + `name` for team libraries. Optional `team` filter on list/get.
 
 #### memory_supersede
 Atomic replace: creates the new memory, marks the old one `deprecated` with `superseded_by` pointer, and creates a `supersedes` link. Use instead of delete-and-recreate.
 
 #### memory_update
-Revise an existing memory. Modes: `body_append`, `body_replace`, `headline_replace`, `headline_and_body_replace`, `revision_only`. Tags and conversations are additive. Full revision history is preserved.
+Revise an existing memory. Modes: `body_append`, `body_replace`, `headline_replace`, `headline_and_body_replace`, `revision_only`. Tags and conversations are additive. `collection` moves a team-namespaced memory to another collection within the same team. Full revision history is preserved.
 
 #### memory_bulk_keep
 Create up to 100 memories with shared defaults. Per-item `tags` and `collections` merge with defaults. Auto-links batch members with `mentioned_with` unless `auto_link: false`.

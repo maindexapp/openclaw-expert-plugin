@@ -1,6 +1,6 @@
 {
   "name": "@maindex/openclaw-expert-plugin",
-  "version": "1.0.0",
+  "version": "1.2.2",
   "description": "Maindex Expert plugin for OpenClaw — full-fidelity relational memory via MCP with OAuth",
   "type": "module",
   "main": "dist/index.js",
