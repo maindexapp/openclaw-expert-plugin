@@ -32,6 +32,10 @@ This plugin connects OpenClaw to **Maindex Expert** — the complete knowledge g
 ### Resources
 - `memory://tags`, `memory://collections`, `memory://recent`, `memory://relation-types`, `memory://sessions`
 
+## Teams Workspaces
+
+Optional `maindex_memory_search` / `maindex_memory_list` / `maindex_memory_recall` `team` filter; team writes with `maindex_memory_keep` (`team` + `collection`); `maindex_collection_manage` action `create_team_collection`. Namespaced IDs: `team-slug:mem-xxxx`. [Teams guide](https://maindex.io/help/teams/).
+
 ## Installation
 
 ```bash

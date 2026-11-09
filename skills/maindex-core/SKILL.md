@@ -50,7 +50,11 @@ Maindex returns both `id` (UUID) and `shortId` (e.g. `mem-1jc4`) for every memor
 
 ### Superseding, Not Deleting
 
-When a fact or decision changes, supersede rather than deleting and recreating. Superseding preserves the history chain: the old memory is marked `deprecated` with a `superseded_by` pointer, and a `supersedes` link is created automatically.
+When a fact or decision changes, supersede rather than deleting and recreating. Superseding preserves the history chain: the old memory is marked `deprecated` with a `superseded_by` pointer, and a `supersedes` link is created automatically. The memory being superseded must be active (not soft-deleted).
+
+### Soft-Delete and Restore (Expert)
+
+`maindex_memory_forget` and bulk `maindex_forget` set status to `deleted` but keep history. Restore with `maindex_memory_update` on the deleted ID (response may include `restoredFromDeleted: true`), or via bulk `maindex_memory_bulk_update` for non-`maindex_forget` operations. `maindex_memory_associate` and `maindex_memory_supersede` do not undelete — restore first if needed.
 
 ### Collections
 
@@ -61,7 +65,7 @@ Group related memories into collections for project-level organization. A memory
 Team workspaces let groups share a scoped slice of the same memory graph.
 
 - **Personal vs team** — Personal memories omit `team`. Team memories are written with `team` + `collection` (both required for team writes).
-- **Roles** — Effective permissions depend on your team role (`owner`, `manager`, `member`). Managers can create team collections and invite members; members can contribute to granted collections.
+- **Roles** — Effective permissions depend on your team role (`owner`, `manager`, `editor`, `viewer`). Collection **grants** control writes on a team collection; search hits may include `effectiveRole` for the collection grant on that result, not a global team role. See [Teams help](https://maindex.io/help/teams/).
 - **Scoped reads** — Use `team` on search/list/recall to focus on one workspace, or `"personal"` for personal-only results.
 - **Team-namespaced IDs** — Team memories may use IDs like `team-slug:mem-xxxx` alongside standard `mem-xxxx` short IDs.
 - **Frozen teams** — Billing or admin freezes can exclude a team's content from mixed results until resolved in the dashboard.
@@ -121,7 +125,9 @@ When storing, choose the right structure:
 As you work with the user's knowledge:
 
 - **Link related memories** when you notice connections. Use `maindex_memory_associate` with specific relation types.
+- **Remove incorrect links** with `maindex_memory_unassociate` when the user approves cleanup (does not delete memories).
 - **Supersede outdated information** when the user corrects a previous decision or fact. Use `maindex_memory_supersede` to preserve the history chain.
+- **Team writes** — use `maindex_memory_keep` with both `team` and `collection` when storing shared team knowledge.
 - **Suggest collections** when you notice a cluster of related memories that aren't organized together.
 - **Flag stale content** if you encounter memories that seem outdated or contradicted by newer information.
 
@@ -153,7 +159,7 @@ You have access to all Maindex Expert MCP tools:
 - `maindex_memory_keep`, `maindex_memory_update`, `maindex_memory_forget`, `maindex_memory_supersede` — for managing individual memories
 - `maindex_memory_search`, `maindex_memory_list`, `maindex_memory_recall` — for finding knowledge
 - `maindex_memory_associate`, `maindex_memory_unassociate`, `maindex_memory_get_related` — for building and traversing the knowledge graph
-- `maindex_collection_manage` — for organizing memories into project groups
+- `maindex_collection_manage` — for organizing memories into project and team groups (`create_team_collection`)
 - `maindex_memory_bulk_keep`, `maindex_memory_bulk_update` — for batch operations
 
 And Maindex resources for quick context:
@@ -224,7 +230,8 @@ Team workspaces share the same memory graph as personal memories but are scoped 
 - **Team writes** — `maindex_memory_keep` requires **both** `team` and `collection` when writing into a team collection.
 - **Team collection moves** — `maindex_memory_update` accepts `collection` for a within-team collection move; `memory_id` must be team-namespaced.
 - **Team-namespaced IDs** — Short IDs may be prefixed: `team-slug:mem-xxxx` (accepted everywhere UUIDs and short IDs are accepted).
-- **Team output fields** — Team writes may return `teamSlug`, `effectiveRole`, and `reviewStatus` on the created memory.
+- **Team output fields** — Team writes may return `teamSlug`, `effectiveRole`, and `reviewStatus` on the created memory. Rejected injection-review memories stay readable for managers via the review queue.
+- **Collection grants** — Team writes require grant on the **target collection**. `effectiveRole` on search results is the grant for that collection, not a global team role.
 
 ### Tool Details
 
@@ -238,13 +245,13 @@ Full-text and semantic search. Supports `search_strategy`: `auto` (default, best
 Structured list/filter. Same filters as search but no free-text query. Optional `team` scopes results. Use for browsing by criteria: "show me all accepted facts tagged domain:auth" or "list memories in collection my-project updated this week."
 
 #### memory_recall
-Get a single memory by UUID, short ID, or team-namespaced ID (`team-slug:mem-xxxx`). Optionally include `revisions`, `links`, and `follow_chain` (supersession traversal). Optional `team` filter.
+Get a single memory by UUID, short ID, or team-namespaced ID (`team-slug:mem-xxxx`). Optionally include `include_revisions` (alias `include_history`), `include_links`, `include_deleted`, and `follow_chain` for supersession traversal (`enabled`, `max_depth`, `max_width`, `include_intermediary_bodies`). Optional `team` filter.
 
 #### memory_associate
-Create typed links from one memory to one or more targets. Specify `relation_type` and optional `weight`. Inverse links are auto-created for known types (e.g. `supports` creates `supported_by` on the target).
+Create typed links from one memory to one or more targets. Specify `relation_type` and optional `weight`. Inverse links are auto-created for known types (e.g. `supports` creates `supported_by` on the target). Source and targets must be **active** (not soft-deleted). Team-namespaced IDs use the same collection-grant rules as other team mutations.
 
 #### memory_unassociate
-Remove typed links. Provide `link_ids` and/or a `from_memory_id` with `targets` (each with `target` and `relation_type`). Does not delete memories — only removes associations. Idempotent for missing links.
+Remove typed links (unlink counterpart to `maindex_memory_associate`). Prefer `link_ids` (`lnk-*` or UUID). Or use triple mode: `from_memory_id` plus `targets` with `memory_id` + `relation_type`, or `memory_id` + `all_relations: true`. Does not delete or restore memories. Idempotent — missing links appear in `not_found`.
 
 #### memory_get_related
 Discover connections. Provide `memory_id`, `tags`, or `collection` — at least one is required. Optionally filter by `relation_type`.
@@ -253,19 +260,19 @@ Discover connections. Provide `memory_id`, `tags`, or `collection` — at least 
 Multi-action tool. Actions: `create`, `create_team_collection`, `update`, `delete`, `add_members`, `remove_members`, `list`, `get`. Collections have `name`, `slug`, `description`, `icon`, `color`, and support nesting via `parent_id`. Use `create_team_collection` with `team` + `name` for team libraries. Optional `team` filter on list/get.
 
 #### memory_supersede
-Atomic replace: creates the new memory, marks the old one `deprecated` with `superseded_by` pointer, and creates a `supersedes` link. Use instead of delete-and-recreate.
+Atomic replace: creates the new memory, marks the old one `deprecated` with `superseded_by` pointer, and creates a `supersedes` link. `old_memory_id` must be active. Team scope is inferred from the old ID or pass `team` + `collection` for the replacement. Use instead of delete-and-recreate.
 
 #### memory_update
-Revise an existing memory. Modes: `body_append`, `body_replace`, `headline_replace`, `headline_and_body_replace`, `revision_only`. Tags and conversations are additive. `collection` moves a team-namespaced memory to another collection within the same team. Full revision history is preserved.
+Revise an existing memory. Modes: `body_append`, `body_replace`, `headline_replace`, `headline_and_body_replace`, `revision_only` (alias `append_mode`). Tags and conversations are additive. `collection` moves a team-namespaced memory to another collection within the same team. Updating a soft-deleted memory **restores** it (`restoredFromDeleted: true`). Setting `canon_status` to `accepted` auto-clears stale `supersededBy`; pass `superseded_by: null` to clear explicitly. Full revision history is preserved.
 
 #### memory_bulk_keep
 Create up to 100 memories with shared defaults. Per-item `tags` and `collections` merge with defaults. Auto-links batch members with `mentioned_with` unless `auto_link: false`.
 
 #### memory_bulk_update
-Batch operations on up to 100 memories: `add_tags`, `remove_tags`, `set_canon_status`, `set_verification_status`, `add_to_collections`, `remove_from_collections`, `merge_metadata`, `add_links`, `maindex_forget`.
+Batch operations on up to 100 memories: `add_tags`, `remove_tags`, `set_kind`, `set_canon_status`, `set_verification_status`, `add_to_collections`, `remove_from_collections`, `merge_metadata`, `add_links`, `maindex_forget`, `clear_superseded_by`. Non-`maindex_forget` ops on deleted rows restore them (`restoredCount` in the response).
 
 #### memory_forget
-Soft-delete (sets status to `deleted`). Restorable. Idempotent.
+Soft-delete (sets status to `deleted`). Restorable via `maindex_memory_update` or bulk update. Idempotent. Accepts team-namespaced IDs when the caller has grant on the memory's team collection.
 
 #### collection_unlock
 Unlock locked collections using a passphrase. Locked collections hide their contents from all sessions until explicitly unlocked. Provide the passphrase to unlock for the current session. Idempotent.
